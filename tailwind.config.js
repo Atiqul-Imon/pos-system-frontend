@@ -7,8 +7,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
+        'sans': ['Roboto', 'sans-serif'],
+        'roboto': ['Roboto', 'sans-serif'],
         'mercellus': ['Mercellus', 'serif'],
-        'pt-serif': ['PT Serif', 'serif'],
       },
     },
   },
