@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore.js';
 import Layout from './components/Layout';
+import OfflineIndicator from './components/OfflineIndicator';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Dashboard from './pages/Dashboard';
@@ -29,28 +30,31 @@ const PrivateRoute = ({ children }: PrivateRouteProps) => {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      
-      <Route
-        path="/"
-        element={
-          <PrivateRoute>
-            <Layout />
-          </PrivateRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="stores" element={<Stores />} />
-        <Route path="products" element={<Products />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="pos" element={<POS />} />
-        <Route path="transactions" element={<Transactions />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="customers" element={<Customers />} />
-      </Route>
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Layout />
+            </PrivateRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="stores" element={<Stores />} />
+          <Route path="products" element={<Products />} />
+          <Route path="inventory" element={<Inventory />} />
+          <Route path="pos" element={<POS />} />
+          <Route path="transactions" element={<Transactions />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="customers" element={<Customers />} />
+        </Route>
+      </Routes>
+      <OfflineIndicator />
+    </>
   );
 }
 
