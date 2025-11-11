@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 
-const OfflineIndicator = () => {
+const OfflineIndicator = memo(() => {
   const { isOnline, pendingSyncs } = useOfflineSync();
 
   if (isOnline && pendingSyncs === 0) {
@@ -26,7 +27,9 @@ const OfflineIndicator = () => {
       ) : null}
     </div>
   );
-};
+});
+
+OfflineIndicator.displayName = 'OfflineIndicator';
 
 export default OfflineIndicator;
 

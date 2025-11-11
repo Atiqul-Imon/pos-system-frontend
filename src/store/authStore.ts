@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { User } from '../services/authService.js';
+import { clearTokenCache } from '../services/api.js';
 
 interface AuthState {
   user: User | null;
@@ -32,6 +33,7 @@ const setStoredAuth = (user: User, token: string): void => {
 const clearStoredAuth = (): void => {
   try {
     localStorage.removeItem('auth-storage');
+    clearTokenCache(); // Clear API token cache
   } catch (error) {
     console.error('Error clearing auth from storage:', error);
   }
@@ -44,6 +46,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: stored.token,
   setAuth: (user: User, token: string) => {
     setStoredAuth(user, token);
+    clearTokenCache(); // Clear cache to force refresh
     set({ user, token });
   },
   logout: () => {

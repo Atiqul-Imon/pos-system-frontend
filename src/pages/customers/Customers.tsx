@@ -1,4 +1,4 @@
-import { useState, ChangeEvent } from 'react';
+import { useState, ChangeEvent, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { customerService } from '../../services/customerService.js';
 import type { Customer } from '../../types/index.js';
@@ -21,7 +21,11 @@ const Customers = () => {
       sortBy,
       tag: filterTag || undefined
     }),
-    { enabled: true }
+    { 
+      enabled: true,
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+    }
   );
 
   const deleteCustomerMutation = useMutation(
@@ -71,7 +75,11 @@ const Customers = () => {
   }
 
   const customers = data?.data?.customers || [];
-  const uniqueTags = Array.from(new Set(customers.flatMap(c => c.tags || []))).sort();
+  
+  // Memoize unique tags calculation
+  const uniqueTags = useMemo(() => {
+    return Array.from(new Set(customers.flatMap(c => c.tags || []))).sort();
+  }, [customers]);
 
   return (
     <div className="container mx-auto p-6">

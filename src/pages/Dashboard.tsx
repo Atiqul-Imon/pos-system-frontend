@@ -1,4 +1,4 @@
-import { useState, ChangeEvent } from 'react';
+import { useState, ChangeEvent, useMemo, useCallback } from 'react';
 import { useQuery } from 'react-query';
 import api from '../services/api.js';
 import { useAuthStore } from '../store/authStore.js';
@@ -79,17 +79,24 @@ const Dashboard = () => {
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const isAdmin = user?.role === 'admin';
 
-  // Fetch all stores for admin
+  // Memoize store ID computation
+  const storeId = useMemo(() => {
+    return selectedStore || (typeof user?.store === 'object' ? user.store._id : user?.store) || null;
+  }, [selectedStore, user?.store]);
+
+  // Fetch all stores for admin with caching
   const { data: storesData } = useQuery<StoresResponse>(
     'stores',
     async () => {
       const response = await api.get<StoresResponse>('/stores');
       return response.data;
     },
-    { enabled: isAdmin }
+    { 
+      enabled: isAdmin,
+      staleTime: 10 * 60 * 1000, // 10 minutes - stores don't change often
+      cacheTime: 30 * 60 * 1000, // 30 minutes
+    }
   );
-
-  const storeId = selectedStore || (typeof user?.store === 'object' ? user.store._id : user?.store) || null;
 
   // Sales report for selected store or user's store
   const { data: salesData } = useQuery<SalesReportResponse>(
@@ -100,20 +107,28 @@ const Dashboard = () => {
       const response = await api.get<SalesReportResponse>('/reports/sales', { params });
       return response.data;
     },
-    { enabled: !!storeId || isAdmin }
+    { 
+      enabled: !!storeId || isAdmin,
+      staleTime: 2 * 60 * 1000, // 2 minutes - sales data changes frequently
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+    }
   );
 
-  // Combined sales report for admin (all stores)
+  // Combined sales report for admin (all stores) - only fetch if no store selected
   const { data: combinedSalesData } = useQuery<SalesReportResponse>(
     'combined-sales-report',
     async () => {
       const response = await api.get<SalesReportResponse>('/reports/sales?groupBy=day');
       return response.data;
     },
-    { enabled: isAdmin }
+    { 
+      enabled: isAdmin && !selectedStore,
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+    }
   );
 
-  // Top products
+  // Top products with caching
   const { data: topProductsData } = useQuery<TopProductsResponse>(
     ['top-products', storeId],
     async () => {
@@ -122,7 +137,11 @@ const Dashboard = () => {
       const response = await api.get<TopProductsResponse>('/reports/top-products', { params });
       return response.data;
     },
-    { enabled: !!storeId || isAdmin }
+    { 
+      enabled: !!storeId || isAdmin,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+    }
   );
 
   // Inventory report for selected store or user's store
@@ -134,57 +153,79 @@ const Dashboard = () => {
       const response = await api.get<InventoryReportResponse>('/reports/inventory', { params });
       return response.data;
     },
-    { enabled: !!storeId || isAdmin }
+    { 
+      enabled: !!storeId || isAdmin,
+      staleTime: 3 * 60 * 1000, // 3 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+    }
   );
 
-  // Combined inventory report for admin
+  // Combined inventory report for admin - only fetch if no store selected
   const { data: combinedInventoryData } = useQuery<InventoryReportResponse>(
     'combined-inventory-report',
     async () => {
       const response = await api.get<InventoryReportResponse>('/reports/inventory');
       return response.data;
     },
-    { enabled: isAdmin }
+    { 
+      enabled: isAdmin && !selectedStore,
+      staleTime: 3 * 60 * 1000, // 3 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+    }
   );
 
-  const displaySalesData = isAdmin && !selectedStore ? combinedSalesData : salesData;
-  const displayInventoryData = isAdmin && !selectedStore ? combinedInventoryData : inventoryData;
+  // Memoize display data selection
+  const displaySalesData = useMemo(() => {
+    return isAdmin && !selectedStore ? combinedSalesData : salesData;
+  }, [isAdmin, selectedStore, combinedSalesData, salesData]);
 
-  const handleStoreChange = (e: ChangeEvent<HTMLSelectElement>) => {
+  const displayInventoryData = useMemo(() => {
+    return isAdmin && !selectedStore ? combinedInventoryData : inventoryData;
+  }, [isAdmin, selectedStore, combinedInventoryData, inventoryData]);
+
+  // Memoize store change handler
+  const handleStoreChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
     setSelectedStore(e.target.value === 'all' ? null : e.target.value);
-  };
+  }, []);
 
-  // Format chart data
-  const salesChartData = displaySalesData?.data?.grouped?.map(item => ({
-    date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    sales: item.sales,
-    transactions: item.transactions
-  })) || [];
+  // Memoize currency formatter
+  const formatCurrency = useCallback((amount: number) => {
+    return `৳${amount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }, []);
 
-  const topProductsChartData = topProductsData?.data?.topProducts?.map(item => ({
-    name: item.product.name.length > 15 ? item.product.name.substring(0, 15) + '...' : item.product.name,
-    quantity: item.quantity,
-    revenue: item.revenue
-  })) || [];
+  // Memoize chart data to avoid recalculating on every render
+  const salesChartData = useMemo(() => {
+    return displaySalesData?.data?.grouped?.map(item => ({
+      date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      sales: item.sales,
+      transactions: item.transactions
+    })) || [];
+  }, [displaySalesData?.data?.grouped]);
 
-  // Inventory pie chart data
-  const inventoryPieData = displayInventoryData?.data?.summary ? [
-    {
-      name: 'In Stock',
-      value: (displayInventoryData.data.summary.totalProducts || 0) - (displayInventoryData.data.summary.lowStockCount || 0)
-    },
-    {
-      name: 'Low Stock',
-      value: displayInventoryData.data.summary.lowStockCount || 0
-    }
-  ] : [];
+  const topProductsChartData = useMemo(() => {
+    return topProductsData?.data?.topProducts?.map(item => ({
+      name: item.product.name.length > 15 ? item.product.name.substring(0, 15) + '...' : item.product.name,
+      quantity: item.quantity,
+      revenue: item.revenue
+    })) || [];
+  }, [topProductsData?.data?.topProducts]);
+
+  // Memoize inventory pie chart data
+  const inventoryPieData = useMemo(() => {
+    if (!displayInventoryData?.data?.summary) return [];
+    return [
+      {
+        name: 'In Stock',
+        value: (displayInventoryData.data.summary.totalProducts || 0) - (displayInventoryData.data.summary.lowStockCount || 0)
+      },
+      {
+        name: 'Low Stock',
+        value: displayInventoryData.data.summary.lowStockCount || 0
+      }
+    ];
+  }, [displayInventoryData?.data?.summary]);
 
   const PIE_COLORS = ['#10B981', '#F59E0B'];
-
-  // Calculate percentage changes (mock for now, can be enhanced with previous period data)
-  const formatCurrency = (amount: number) => {
-    return `৳${amount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
 
   return (
     <div className="space-y-6">
@@ -233,7 +274,7 @@ const Dashboard = () => {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Total Sales Card */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform duration-200">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="bg-white bg-opacity-20 rounded-lg p-3">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -253,7 +294,7 @@ const Dashboard = () => {
         </div>
 
         {/* Transactions Card */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform duration-200">
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="bg-white bg-opacity-20 rounded-lg p-3">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,7 +314,7 @@ const Dashboard = () => {
         </div>
 
         {/* Products Card */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform duration-200">
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="bg-white bg-opacity-20 rounded-lg p-3">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -293,7 +334,7 @@ const Dashboard = () => {
         </div>
 
         {/* Low Stock Card */}
-        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform duration-200">
+        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="bg-white bg-opacity-20 rounded-lg p-3">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -510,6 +551,13 @@ const Dashboard = () => {
                 key={store._id} 
                 className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => setSelectedStore(store._id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    setSelectedStore(store._id);
+                  }
+                }}
               >
                 <h3 className="font-semibold text-gray-900 mb-2">{store.name}</h3>
                 <p className="text-sm text-gray-600 mb-1">Code: {store.code}</p>

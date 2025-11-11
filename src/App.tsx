@@ -1,18 +1,27 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, ReactNode } from 'react';
 import { useAuthStore } from './store/authStore.js';
 import Layout from './components/Layout';
 import OfflineIndicator from './components/OfflineIndicator';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
-import Dashboard from './pages/Dashboard';
-import Stores from './pages/stores/Stores';
-import Products from './pages/products/Products';
-import Inventory from './pages/inventory/Inventory';
-import POS from './pages/pos/POS';
-import Transactions from './pages/transactions/Transactions';
-import Reports from './pages/reports/Reports';
-import Customers from './pages/customers/Customers';
-import { ReactNode } from 'react';
+
+// Lazy load components for code splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Stores = lazy(() => import('./pages/stores/Stores'));
+const Products = lazy(() => import('./pages/products/Products'));
+const Inventory = lazy(() => import('./pages/inventory/Inventory'));
+const POS = lazy(() => import('./pages/pos/POS'));
+const Transactions = lazy(() => import('./pages/transactions/Transactions'));
+const Reports = lazy(() => import('./pages/reports/Reports'));
+const Customers = lazy(() => import('./pages/customers/Customers'));
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+  </div>
+);
 
 interface PrivateRouteProps {
   children: ReactNode;
@@ -43,14 +52,70 @@ function App() {
             </PrivateRoute>
           }
         >
-          <Route index element={<Dashboard />} />
-          <Route path="stores" element={<Stores />} />
-          <Route path="products" element={<Products />} />
-          <Route path="inventory" element={<Inventory />} />
-          <Route path="pos" element={<POS />} />
-          <Route path="transactions" element={<Transactions />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="customers" element={<Customers />} />
+          <Route 
+            index 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Dashboard />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="stores" 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Stores />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="products" 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Products />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="inventory" 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Inventory />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="pos" 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <POS />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="transactions" 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Transactions />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="reports" 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Reports />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="customers" 
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Customers />
+              </Suspense>
+            } 
+          />
         </Route>
       </Routes>
       <OfflineIndicator />

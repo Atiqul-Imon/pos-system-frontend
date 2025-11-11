@@ -1,4 +1,4 @@
-import { useState, ChangeEvent } from 'react';
+import { useState, ChangeEvent, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import api from '../../services/api.js';
 import { useAuthStore } from '../../store/authStore.js';
@@ -46,6 +46,10 @@ const Products = () => {
       }
       const response = await api.get<ProductsResponse>('/products', { params });
       return response.data;
+    },
+    {
+      staleTime: 3 * 60 * 1000, // 3 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
     }
   );
 
@@ -103,16 +107,21 @@ const Products = () => {
 
   const canManageProducts = user?.role === 'admin' || user?.role === 'manager';
 
-  const filteredProducts = data?.data?.products?.filter((product) => {
-    if (!searchTerm) return true;
+  // Memoize filtered products to avoid recalculating on every render
+  const filteredProducts = useMemo(() => {
+    if (!data?.data?.products) return [];
+    if (!searchTerm) return data.data.products;
+    
     const search = searchTerm.toLowerCase();
-    return (
-      product.name.toLowerCase().includes(search) ||
-      product.sku.toLowerCase().includes(search) ||
-      product.category.toLowerCase().includes(search) ||
-      (product.barcode && product.barcode.toLowerCase().includes(search))
-    );
-  });
+    return data.data.products.filter((product) => {
+      return (
+        product.name.toLowerCase().includes(search) ||
+        product.sku.toLowerCase().includes(search) ||
+        product.category.toLowerCase().includes(search) ||
+        (product.barcode && product.barcode.toLowerCase().includes(search))
+      );
+    });
+  }, [data?.data?.products, searchTerm]);
 
   return (
     <div>

@@ -22,6 +22,10 @@ const Transactions = () => {
       if (storeId) params.store = storeId;
       const response = await api.get<TransactionsResponse>('/transactions', { params });
       return response.data;
+    },
+    {
+      staleTime: 1 * 60 * 1000, // 1 minute
+      cacheTime: 5 * 60 * 1000, // 5 minutes
     }
   );
 

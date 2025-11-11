@@ -1,4 +1,4 @@
-import { useState, ChangeEvent } from 'react';
+import { useState, ChangeEvent, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import api from '../../services/api.js';
 import { useAuthStore } from '../../store/authStore.js';
@@ -64,7 +64,11 @@ const Inventory = () => {
       const response = await api.get<InventoryResponse>(url);
       return response.data;
     },
-    { enabled: !!storeId }
+    { 
+      enabled: !!storeId,
+      staleTime: 1 * 60 * 1000, // 1 minute
+      cacheTime: 3 * 60 * 1000, // 3 minutes
+    }
   );
 
   const { data: lowStockData } = useQuery<LowStockResponse>(
@@ -74,7 +78,11 @@ const Inventory = () => {
       const response = await api.get<LowStockResponse>(`/inventory/store/${storeId}/low-stock`);
       return response.data;
     },
-    { enabled: !!storeId }
+    { 
+      enabled: !!storeId,
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+    }
   );
 
   const updateInventoryMutation = useMutation(
@@ -153,16 +161,20 @@ const Inventory = () => {
     }
   };
 
-  // Filter inventory by search term
-  const filteredInventory = data?.data?.inventory?.filter((item) => {
-    if (!searchTerm) return true;
-    const product = typeof item.product === 'object' ? item.product : null;
+  // Memoize filtered inventory to avoid recalculating on every render
+  const filteredInventory = useMemo(() => {
+    if (!data?.data?.inventory) return [];
+    if (!searchTerm) return data.data.inventory;
+    
     const searchLower = searchTerm.toLowerCase();
-    return (
-      product?.name.toLowerCase().includes(searchLower) ||
-      product?.sku.toLowerCase().includes(searchLower)
-    );
-  }) || [];
+    return data.data.inventory.filter((item) => {
+      const product = typeof item.product === 'object' ? item.product : null;
+      return (
+        product?.name.toLowerCase().includes(searchLower) ||
+        product?.sku.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [data?.data?.inventory, searchTerm]);
 
   const lowStockCount = lowStockData?.data?.lowStockItems?.length || 0;
 

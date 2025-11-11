@@ -1,4 +1,4 @@
-import { useState, ChangeEvent, useEffect, useRef, KeyboardEvent } from 'react';
+import { useState, ChangeEvent, useEffect, useRef, KeyboardEvent, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import api from '../../services/api.js';
 import { useAuthStore } from '../../store/authStore.js';
@@ -136,7 +136,7 @@ const POS = () => {
     }
   }, []);
 
-  // Fetch products with search and filters
+  // Fetch products with search and filters - with caching
   const { data: products } = useQuery<ProductsResponse>(
     ['products', storeId, debouncedSearchTerm, selectedCategory, selectedBrand],
     async () => {
@@ -148,10 +148,14 @@ const POS = () => {
       const response = await api.get<ProductsResponse>('/products', { params });
       return response.data;
     },
-    { enabled: !!storeId }
+    { 
+      enabled: !!storeId,
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+    }
   );
 
-  // Fetch inventory
+  // Fetch inventory - with caching
   const { data: inventory } = useQuery<InventoryResponse>(
     ['inventory', storeId],
     async () => {
@@ -159,17 +163,25 @@ const POS = () => {
       const response = await api.get<InventoryResponse>(`/inventory/store/${storeId}`);
       return response.data;
     },
-    { enabled: !!storeId }
+    { 
+      enabled: !!storeId,
+      staleTime: 1 * 60 * 1000, // 1 minute - inventory changes frequently
+      cacheTime: 3 * 60 * 1000, // 3 minutes
+    }
   );
 
-  // Get unique categories and brands for filters
-  const categories = Array.from(
-    new Set(products?.data?.products?.map(p => p.category).filter(Boolean) || [])
-  ).sort();
+  // Memoize unique categories and brands - only recalculate when products change
+  const categories = useMemo(() => {
+    return Array.from(
+      new Set(products?.data?.products?.map(p => p.category).filter(Boolean) || [])
+    ).sort();
+  }, [products?.data?.products]);
 
-  const brands = Array.from(
-    new Set(products?.data?.products?.map(p => p.brand).filter(Boolean) || [])
-  ).sort();
+  const brands = useMemo(() => {
+    return Array.from(
+      new Set(products?.data?.products?.map(p => p.brand).filter(Boolean) || [])
+    ).sort();
+  }, [products?.data?.products]);
 
   const createSaleMutation = useMutation(
     async (transactionData: SaleTransactionData) => {
@@ -235,15 +247,24 @@ const POS = () => {
     }
   );
 
-  // Filter and sort products
-  const filteredProducts = products?.data?.products
-    ?.filter((product) => {
-      const inventoryItem = inventory?.data?.inventory?.find(
-        (item) => {
-          const productId = typeof item.product === 'object' ? item.product._id : item.product;
-          return productId === product._id;
-        }
-      );
+  // Create inventory map for O(1) lookups instead of O(n) finds
+  const inventoryMap = useMemo(() => {
+    if (!inventory?.data?.inventory) return new Map();
+    const map = new Map<string, typeof inventory.data.inventory[0]>();
+    inventory.data.inventory.forEach((item) => {
+      const productId = typeof item.product === 'object' ? item.product._id : item.product;
+      map.set(productId, item);
+    });
+    return map;
+  }, [inventory?.data?.inventory]);
+
+  // Memoize filtered and sorted products - expensive operation
+  const filteredProducts = useMemo(() => {
+    if (!products?.data?.products) return [];
+
+    // Filter products
+    const filtered = products.data.products.filter((product) => {
+      const inventoryItem = inventoryMap.get(product._id);
 
       // Filter by stock availability
       if (showInStockOnly && (!inventoryItem || inventoryItem.quantity === 0)) {
@@ -251,20 +272,12 @@ const POS = () => {
       }
 
       return true;
-    })
-    .sort((a, b) => {
-      const inventoryA = inventory?.data?.inventory?.find(
-        (item) => {
-          const productId = typeof item.product === 'object' ? item.product._id : item.product;
-          return productId === a._id;
-        }
-      );
-      const inventoryB = inventory?.data?.inventory?.find(
-        (item) => {
-          const productId = typeof item.product === 'object' ? item.product._id : item.product;
-          return productId === b._id;
-        }
-      );
+    });
+
+    // Sort products using inventory map for faster lookups
+    return filtered.sort((a, b) => {
+      const inventoryA = inventoryMap.get(a._id);
+      const inventoryB = inventoryMap.get(b._id);
 
       switch (sortOption) {
         case 'name':
@@ -278,7 +291,8 @@ const POS = () => {
         default:
           return 0;
       }
-    }) || [];
+    });
+  }, [products?.data?.products, inventoryMap, showInStockOnly, sortOption]);
 
   // Handle barcode scanning and search input
   const handleBarcodeInput = (value: string) => {
