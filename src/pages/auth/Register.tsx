@@ -40,9 +40,6 @@ const Register = () => {
       // Use public endpoint that doesn't require authentication
       const response = await api.get<StoresResponse>('/stores/public');
       return response.data;
-    },
-    {
-      enabled: formData.role !== 'admin' // Only fetch if not admin
     }
   );
 
@@ -50,9 +47,7 @@ const Register = () => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: value,
-      // Clear store selection if role is changed to admin
-      ...(name === 'role' && value === 'admin' && { store: '' })
+      [name]: value
     });
   };
 
@@ -150,8 +145,10 @@ const Register = () => {
               <option value="staff">Staff</option>
               <option value="cashier">Cashier</option>
               <option value="manager">Manager</option>
-              <option value="admin">Admin</option>
             </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Admin accounts can only be created by existing administrators
+            </p>
           </div>
 
           <div>
@@ -168,33 +165,31 @@ const Register = () => {
             />
           </div>
 
-          {formData.role !== 'admin' && (
-            <div>
-              <label htmlFor="store" className="block text-sm font-medium text-gray-700 mb-2">
-                Store <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="store"
-                name="store"
-                value={formData.store}
-                onChange={handleChange}
-                required={formData.role !== 'admin'}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Select a store</option>
-                {storesData?.data?.stores?.map((store) => (
-                  <option key={store._id} value={store._id}>
-                    {store.name} ({store.code})
-                  </option>
-                ))}
-              </select>
-              {storesData?.data?.stores?.length === 0 && (
-                <p className="text-sm text-yellow-600 mt-1">
-                  No stores available. Please create stores first.
-                </p>
-              )}
-            </div>
-          )}
+          <div>
+            <label htmlFor="store" className="block text-sm font-medium text-gray-700 mb-2">
+              Store <span className="text-red-500">*</span>
+            </label>
+            <select
+              id="store"
+              name="store"
+              value={formData.store}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select a store</option>
+              {storesData?.data?.stores?.map((store) => (
+                <option key={store._id} value={store._id}>
+                  {store.name} ({store.code})
+                </option>
+              ))}
+            </select>
+            {storesData?.data?.stores?.length === 0 && (
+              <p className="text-sm text-yellow-600 mt-1">
+                No stores available. Please create stores first.
+              </p>
+            )}
+          </div>
 
           <button
             type="submit"
