@@ -70,16 +70,17 @@ const Customers = () => {
     setSelectedCustomer(null);
   };
 
-  if (isLoading) {
-    return <div>Loading customers...</div>;
-  }
-
   const customers = data?.data?.customers || [];
   
   // Memoize unique tags calculation
+  // MUST be before any early returns to follow Rules of Hooks
   const uniqueTags = useMemo(() => {
     return Array.from(new Set(customers.flatMap(c => c.tags || []))).sort();
   }, [customers]);
+
+  if (isLoading) {
+    return <div>Loading customers...</div>;
+  }
 
   return (
     <div className="container mx-auto p-6">
