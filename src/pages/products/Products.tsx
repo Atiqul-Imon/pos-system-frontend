@@ -101,13 +101,10 @@ const Products = () => {
     setEditingProduct(null);
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
   const canManageProducts = user?.role === 'admin' || user?.role === 'manager';
 
   // Memoize filtered products to avoid recalculating on every render
+  // MUST be before any early returns to follow Rules of Hooks
   const filteredProducts = useMemo(() => {
     if (!data?.data?.products) return [];
     if (!searchTerm) return data.data.products;
@@ -122,6 +119,10 @@ const Products = () => {
       );
     });
   }, [data?.data?.products, searchTerm]);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div>
